@@ -1,4 +1,6 @@
 import SwiftUI
+import FirebaseFirestore
+import FirebaseAuth
 
 // MARK: - 單個格子的模型
 struct Cell: Identifiable {
@@ -9,7 +11,7 @@ struct Cell: Identifiable {
     var neighborMines = 0
 }
 
-// MARK: - 遊戲狀態管理
+// MARK: - 遊戲狀態管理（新增計時器）
 @Observable
 class MinesweeperViewModel {
     var board: [[Cell]] = []
@@ -20,6 +22,10 @@ class MinesweeperViewModel {
     var gameOver = false
     var isWin = false
     var message = ""
+    
+    // 計時器相關
+    var elapsedTime: Int = 0
+    private var timer: Timer? = nil
     
     func startNewGame() {
         board = Array(repeating: Array(repeating: Cell(), count: columns), count: rows)
@@ -43,6 +49,22 @@ class MinesweeperViewModel {
         gameOver = false
         isWin = false
         message = ""
+        elapsedTime = 0
+        startTimer()
+    }
+    
+    private func startTimer() {
+        timer?.invalidate()
+        timer = Timer.scheduledTimer(withTimeInterval: 1.0, repeats: true) { _ in
+            if !self.gameOver {
+                self.elapsedTime += 1
+            }
+        }
+    }
+    
+    func stopTimer() {
+        timer?.invalidate()
+        timer = nil
     }
     
     private func countNeighborMines(atRow row: Int, col: Int) -> Int {
@@ -72,6 +94,7 @@ class MinesweeperViewModel {
         if board[row][col].isMine {
             gameOver = true
             message = "💥 踩到地雷了！"
+            stopTimer()
             revealAllMines()
             return
         }
@@ -142,7 +165,9 @@ class MinesweeperViewModel {
         if unrevealedNonMines == 0 {
             gameOver = true
             isWin = true
-            message = "🎉 恭喜！你贏了！"
+            message = "🎉 恭喜！你贏了！用了 \(elapsedTime) 秒"
+            stopTimer()
+            // 這裡上傳記錄（之後在 View 呼叫）
         }
     }
 }
@@ -220,10 +245,64 @@ struct CellView: View {
     }
 }
 
-// MARK: - 主遊戲畫面（新增登出功能）
+// MARK: - 歷史紀錄頁面
+struct HistoryView: View {
+    @State private var records: [GameRecord] = []
+    
+    struct GameRecord: Identifiable {
+        let id = UUID()
+        let difficulty: String
+        let time: Int
+        let timestamp: Date
+    }
+    
+    var body: some View {
+        List(records) { record in
+            HStack {
+                Text(record.difficulty)
+                Spacer()
+                Text("\(record.time) 秒")
+                    .foregroundStyle(.gray)
+                Text(record.timestamp, style: .date)
+                    .font(.caption)
+                    .foregroundStyle(.gray)
+            }
+        }
+        .navigationTitle("歷史紀錄")
+        .onAppear {
+            loadRecords()
+        }
+    }
+    
+    private func loadRecords() {
+        guard let userId = Auth.auth().currentUser?.uid else { return }
+        
+        let db = Firestore.firestore()
+        db.collection("users").document(userId).collection("games")
+            .order(by: "timestamp", descending: true)
+            .getDocuments { snapshot, error in
+                guard let documents = snapshot?.documents else {
+                    print("讀取記錄失敗: \(error?.localizedDescription ?? "")")
+                    return
+                }
+                
+                records = documents.compactMap { doc in
+                    let data = doc.data()
+                    guard let difficulty = data["difficulty"] as? String,
+                          let time = data["time"] as? Int,
+                          let timestamp = data["timestamp"] as? Timestamp else {
+                        return nil
+                    }
+                    return GameRecord(difficulty: difficulty, time: time, timestamp: timestamp.dateValue())
+                }
+            }
+    }
+}
+
+// MARK: - 主遊戲畫面（加計時器 + 歷史頁面導航 + 上傳記錄）
 struct MinesweeperView: View {
     @State private var viewModel = MinesweeperViewModel()
-    @Environment(AuthViewModel.self) private var authVM  // 從環境取得 AuthViewModel
+    @Environment(AuthViewModel.self) private var authVM
     
     var body: some View {
         NavigationStack {
@@ -234,11 +313,15 @@ struct MinesweeperView: View {
                 HStack {
                     Text("剩餘地雷: \(viewModel.totalMines - flagCount)")
                     Spacer()
-                    Text(viewModel.message)
-                        .foregroundStyle(viewModel.isWin ? .green : .red)
+                    Text("時間: \(viewModel.elapsedTime) 秒")
                         .font(.headline)
                 }
                 .padding(.horizontal)
+                
+                Text(viewModel.message)
+                    .foregroundStyle(viewModel.isWin ? .green : .red)
+                    .font(.title2)
+                    .padding()
                 
                 VStack(spacing: 4) {
                     ForEach(0..<viewModel.rows, id: \.self) { row in
@@ -272,23 +355,58 @@ struct MinesweeperView: View {
                         authVM.signOut()
                     }
                     .foregroundStyle(.red)
-                    .font(.headline)
+                }
+                
+                ToolbarItem(placement: .topBarLeading) {
+                    NavigationLink("歷史") {
+                        HistoryView()
+                    }
                 }
             }
         }
         .task {
             viewModel.startNewGame()
         }
+        .onChange(of: viewModel.isWin) { newValue in
+            if newValue {
+                uploadWinRecord()
+            }
+        }
+        .onDisappear {
+            viewModel.stopTimer()
+        }
     }
     
     private var flagCount: Int {
         viewModel.board.flatMap { $0 }.filter { $0.isFlagged }.count
     }
+    
+    private func uploadWinRecord() {
+        guard let userId = Auth.auth().currentUser?.uid else { return }
+        
+        let db = Firestore.firestore()
+        let difficulty = "\(viewModel.rows)x\(viewModel.columns)"
+        
+        let record: [String: Any] = [
+            "difficulty": difficulty,
+            "time": viewModel.elapsedTime,
+            "timestamp": FieldValue.serverTimestamp()
+        ]
+        
+        db.collection("users").document(userId).collection("games").addDocument(data: record) { error in
+            if let error = error {
+                print("上傳失敗: \(error)")
+            } else {
+                print("通關記錄上傳成功！")
+            }
+        }
+    }
 }
 
-// MARK: - 預覽（註：預覽時沒有 AuthViewModel 環境，所以會顯示登入畫面或錯誤）
+// MARK: - 預覽
 #Preview {
     let vm = MinesweeperViewModel()
     vm.startNewGame()
     return MinesweeperView()
+        .environment(AuthViewModel())
 }
