@@ -18,7 +18,7 @@ struct ChatView: View {
     @State private var inputText = ""
     @State private var isLoading = false
     
-    private let apiKey = "sk-789b213e679a45578ade0528f2285709"  // 你的 DeepSeek API Key
+    private let apiKey = "sk-789b213e679a45578ade0528f2285709"  // DeepSeek API Key
     private let apiURL = URL(string: "https://api.deepseek.com/v1/chat/completions")!
     
     var body: some View {

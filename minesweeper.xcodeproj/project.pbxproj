@@ -11,6 +11,7 @@
 		040188622F17C6D40049D248 /* FirebaseAuth in Frameworks */ = {isa = PBXBuildFile; productRef = 040188612F17C6D40049D248 /* FirebaseAuth */; };
 		040188642F17C7200049D248 /* FirebaseFirestore in Frameworks */ = {isa = PBXBuildFile; productRef = 040188632F17C7200049D248 /* FirebaseFirestore */; };
 		040188662F17C75B0049D248 /* FirebaseFirestoreCombine-Community in Frameworks */ = {isa = PBXBuildFile; productRef = 040188652F17C75B0049D248 /* FirebaseFirestoreCombine-Community */; };
+		040188732F1A4E0E0049D248 /* XCTest.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = 040188712F1A4C400049D248 /* XCTest.framework */; platformFilter = ios; };
 /* End PBXBuildFile section */
 
 /* Begin PBXContainerItemProxy section */
@@ -34,6 +35,7 @@
 		0401881D2F17AB8E0049D248 /* minesweeper.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = minesweeper.app; sourceTree = BUILT_PRODUCTS_DIR; };
 		0401882D2F17AB8F0049D248 /* minesweeperTests.xctest */ = {isa = PBXFileReference; explicitFileType = wrapper.cfbundle; includeInIndex = 0; path = minesweeperTests.xctest; sourceTree = BUILT_PRODUCTS_DIR; };
 		040188372F17AB8F0049D248 /* minesweeperUITests.xctest */ = {isa = PBXFileReference; explicitFileType = wrapper.cfbundle; includeInIndex = 0; path = minesweeperUITests.xctest; sourceTree = BUILT_PRODUCTS_DIR; };
+		040188712F1A4C400049D248 /* XCTest.framework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.framework; name = XCTest.framework; path = Platforms/iPhoneOS.platform/Developer/Library/Frameworks/XCTest.framework; sourceTree = DEVELOPER_DIR; };
 /* End PBXFileReference section */
 
 /* Begin PBXFileSystemSynchronizedBuildFileExceptionSet section */
@@ -83,6 +85,7 @@
 			isa = PBXFrameworksBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
+				040188732F1A4E0E0049D248 /* XCTest.framework in Frameworks */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -102,6 +105,7 @@
 				0401881F2F17AB8E0049D248 /* minesweeper */,
 				040188302F17AB8F0049D248 /* minesweeperTests */,
 				0401883A2F17AB8F0049D248 /* minesweeperUITests */,
+				040188702F1A4C340049D248 /* Frameworks */,
 				0401881E2F17AB8E0049D248 /* Products */,
 			);
 			sourceTree = "<group>";
@@ -114,6 +118,14 @@
 				040188372F17AB8F0049D248 /* minesweeperUITests.xctest */,
 			);
 			name = Products;
+			sourceTree = "<group>";
+		};
+		040188702F1A4C340049D248 /* Frameworks */ = {
+			isa = PBXGroup;
+			children = (
+				040188712F1A4C400049D248 /* XCTest.framework */,
+			);
+			name = Frameworks;
 			sourceTree = "<group>";
 		};
 /* End PBXGroup section */
@@ -400,6 +412,7 @@
 				DEBUG_INFORMATION_FORMAT = "dwarf-with-dsym";
 				ENABLE_NS_ASSERTIONS = NO;
 				ENABLE_STRICT_OBJC_MSGSEND = YES;
+				ENABLE_TESTABILITY = YES;
 				ENABLE_USER_SCRIPT_SANDBOXING = YES;
 				GCC_C_LANGUAGE_STANDARD = gnu17;
 				GCC_NO_COMMON_BLOCKS = YES;
@@ -444,6 +457,7 @@
 					"@executable_path/Frameworks",
 				);
 				MARKETING_VERSION = 1.0;
+				NEW_SETTING = "";
 				PRODUCT_BUNDLE_IDENTIFIER = abc.minesweeper;
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				SWIFT_EMIT_LOC_STRINGS = YES;
@@ -477,6 +491,7 @@
 					"@executable_path/Frameworks",
 				);
 				MARKETING_VERSION = 1.0;
+				NEW_SETTING = "";
 				PRODUCT_BUNDLE_IDENTIFIER = abc.minesweeper;
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				SWIFT_EMIT_LOC_STRINGS = YES;

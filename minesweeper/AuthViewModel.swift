@@ -32,7 +32,7 @@ class AuthViewModel {
         isLoading = true
         errorMessage = nil
         
-        // Firebase 的 email/password 登入，但我們用 username@fake.com 模擬
+        // Firebase 的 email/password
         let email = "\(username)@minesweeper.local"  // 假 email，密碼真實
         
         Auth.auth().signIn(withEmail: email, password: password) { result, error in

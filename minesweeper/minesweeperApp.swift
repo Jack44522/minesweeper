@@ -4,7 +4,7 @@ import FirebaseCore
 @main
 struct MinesweeperApp: App {
     init() {
-        FirebaseApp.configure()  // 必須在第一時間呼叫
+        FirebaseApp.configure()  // 第一時間呼叫firebase
     }
     
     var body: some Scene {

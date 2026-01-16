@@ -115,7 +115,7 @@ class LocationManager: NSObject, ObservableObject, CLLocationManagerDelegate {
     }
 }
 
-// MARK: - 遊戲狀態管理
+// 遊戲狀態管理
 @Observable
 class MinesweeperViewModel {
     var board: [[Cell]] = []
@@ -396,7 +396,7 @@ struct CellView: View {
     }
 }
 
-// MARK: - 歷史紀錄頁面
+// 歷史紀錄頁面
 struct HistoryView: View {
     @State private var records: [GameRecord] = []
     
@@ -629,10 +629,12 @@ struct MinesweeperView: View {
     }
 }
 
-// MARK: - 預覽
+// 預覽
 #Preview {
     let vm = MinesweeperViewModel()
     vm.startNewGame()
     return MinesweeperView()
         .environment(AuthViewModel())
 }
+
+
