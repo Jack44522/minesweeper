@@ -4,9 +4,9 @@ import FirebaseAuth
 
 // MARK: - 難度等級
 enum Difficulty {
-    case easy  // 6x6, 6 mines
-    case medium  // 9x9, 10 mines
-    case hard  // 16x16, 40 mines
+    case easy   // 6x6, 6 mines
+    case medium // 9x9, 10 mines
+    case hard   // 16x16, 40 mines
     
     var rows: Int {
         switch self {
@@ -34,17 +34,17 @@ enum Difficulty {
     
     var label: String {
         switch self {
-        case .easy: return "初級 (6x6, 6雷)"
-        case .medium: return "中級 (9x9, 10雷)"
-        case .hard: return "高級 (16x16, 40雷)"
+        case .easy: return "初級 (6×6, 6雷)"
+        case .medium: return "中級 (9×9, 10雷)"
+        case .hard: return "高級 (16×16, 40雷)"
         }
     }
     
     var string: String {
         switch self {
-        case .easy: return "6x6"
-        case .medium: return "9x9"
-        case .hard: return "16x16"
+        case .easy: return "6×6"
+        case .medium: return "9×9"
+        case .hard: return "16×16"
         }
     }
 }
@@ -271,6 +271,7 @@ struct CellView: View {
     let board: [[Cell]]
     let row: Int
     let col: Int
+    let cellSize: CGFloat
     let onReveal: (Int, Int) -> Void
     let onToggleFlag: (Int, Int) -> Void
     
@@ -291,10 +292,10 @@ struct CellView: View {
                 )
             
             Text(displayText)
-                .font(.system(size: 20, weight: .bold))
+                .font(.system(size: cellSize * 0.6, weight: .bold))
                 .foregroundStyle(textColor)
         }
-        .frame(width: 44, height: 44)
+        .frame(width: cellSize, height: cellSize)
         .onTapGesture {
             onReveal(row, col)
         }
@@ -440,72 +441,82 @@ struct HistoryView: View {
     }
 }
 
-// MARK: - 主遊戲畫面
+// MARK: - 主遊戲畫面（版面完全置中 + 動態格子大小 + 橫豎向優化）
 struct MinesweeperView: View {
     @State private var viewModel = MinesweeperViewModel()
     @Environment(AuthViewModel.self) private var authVM
     
     var body: some View {
         NavigationStack {
-            VStack(spacing: 20) {
-                Text(viewModel.currentDifficulty.label)
-                    .font(.title.bold())
+            GeometryReader { geometry in
+                let totalWidth = geometry.size.width
+                let totalHeight = geometry.size.height
                 
-                HStack {
-                    Text("剩餘地雷: \(viewModel.totalMines - flagCount)")
-                    Spacer()
-                    Text("時間: \(viewModel.elapsedTime) 秒")
-                        .font(.headline)
-                }
-                .padding(.horizontal)
+                // 計算最大板寬/高，讓總面積穩定（豎向 90% 寬，橫向 70% 高）
+                let maxBoardWidth = totalWidth * 0.9
+                let maxBoardHeight = totalHeight * (geometry.size.width > geometry.size.height ? 0.7 : 0.6)
                 
-                Text(viewModel.message)
-                    .foregroundStyle(viewModel.isWin ? .green : .red)
-                    .font(.title2)
-                    .padding()
+                let cellSize = min(maxBoardWidth / CGFloat(viewModel.columns),
+                                   maxBoardHeight / CGFloat(viewModel.rows))
                 
-                VStack(spacing: 4) {
-                    ForEach(0..<viewModel.rows, id: \.self) { row in
-                        HStack(spacing: 4) {
-                            ForEach(0..<viewModel.columns, id: \.self) { col in
-                                CellView(
-                                    board: viewModel.board,
-                                    row: row,
-                                    col: col,
-                                    onReveal: viewModel.reveal,
-                                    onToggleFlag: viewModel.toggleFlag
-                                )
+                VStack(spacing: 16) {
+                    Text(viewModel.currentDifficulty.label)
+                        .font(.title.bold())
+                        .frame(maxWidth: .infinity, alignment: .center)
+                    
+                    HStack {
+                        Text("剩餘地雷: \(viewModel.totalMines - flagCount)")
+                        Spacer()
+                        Text("時間: \(viewModel.elapsedTime) 秒")
+                            .font(.headline)
+                    }
+                    .padding(.horizontal, 20)
+                    .frame(maxWidth: .infinity, alignment: .center)
+                    
+                    Text(viewModel.message)
+                        .foregroundStyle(viewModel.isWin ? .green : .red)
+                        .font(.title2)
+                        .padding()
+                        .frame(maxWidth: .infinity, alignment: .center)
+                    
+                    // 遊戲板置中容器
+                    VStack(spacing: 2) {
+                        ForEach(0..<viewModel.rows, id: \.self) { row in
+                            HStack(spacing: 2) {
+                                ForEach(0..<viewModel.columns, id: \.self) { col in
+                                    CellView(
+                                        board: viewModel.board,
+                                        row: row,
+                                        col: col,
+                                        cellSize: cellSize,
+                                        onReveal: viewModel.reveal,
+                                        onToggleFlag: viewModel.toggleFlag
+                                    )
+                                }
                             }
                         }
                     }
-                }
-                .padding()
-                .background(Color.gray.opacity(0.1))
-                .clipShape(RoundedRectangle(cornerRadius: 12))
-                
-                Button("新遊戲") {
-                    viewModel.startNewGame()
-                }
-                .buttonStyle(.borderedProminent)
-                .padding()
-                
-                HStack {
-                    Button("初級") {
-                        viewModel.startNewGame(difficulty: .easy)
-                    }
-                    .buttonStyle(.bordered)
+                    .padding(10)
+                    .background(Color.gray.opacity(0.1))
+                    .clipShape(RoundedRectangle(cornerRadius: 12))
+                    .frame(width: cellSize * CGFloat(viewModel.columns) + 20,
+                           height: cellSize * CGFloat(viewModel.rows) + 20,
+                           alignment: .center)
+                    .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .center)
                     
-                    Button("中級") {
-                        viewModel.startNewGame(difficulty: .medium)
+                    HStack(spacing: 20) {
+                        ForEach([Difficulty.easy, .medium, .hard], id: \.self) { diff in
+                            Button(diff.label) {
+                                viewModel.startNewGame(difficulty: diff)
+                            }
+                            .buttonStyle(.bordered)
+                        }
                     }
-                    .buttonStyle(.bordered)
-                    
-                    Button("高級") {
-                        viewModel.startNewGame(difficulty: .hard)
-                    }
-                    .buttonStyle(.bordered)
+                    .padding()
+                    .frame(maxWidth: .infinity, alignment: .center)
                 }
                 .padding()
+                .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .center)
             }
             .navigationTitle("Minesweeper")
             .toolbar {
