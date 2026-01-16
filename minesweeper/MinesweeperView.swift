@@ -1,6 +1,7 @@
 import SwiftUI
 import FirebaseFirestore
 import FirebaseAuth
+import CoreLocation
 
 // MARK: - 難度等級
 enum Difficulty {
@@ -56,6 +57,62 @@ struct Cell: Identifiable {
     var isRevealed = false
     var isFlagged = false
     var neighborMines = 0
+}
+
+// MARK: - 位置管理器
+class LocationManager: NSObject, ObservableObject, CLLocationManagerDelegate {
+    private let locationManager = CLLocationManager()
+    @Published var locationName: String = "取得位置中..."
+    
+    override init() {
+        super.init()
+        locationManager.delegate = self
+        locationManager.requestWhenInUseAuthorization()
+        locationManager.startUpdatingLocation()
+    }
+    
+    func locationManager(_ manager: CLLocationManager, didUpdateLocations locations: [CLLocation]) {
+        guard let location = locations.last else { return }
+        
+        let geocoder = CLGeocoder()
+        geocoder.reverseGeocodeLocation(location) { placemarks, error in
+            if let error = error {
+                print("位置反查錯誤: \(error)")
+                self.locationName = "位置未知"
+                return
+            }
+            
+            if let placemark = placemarks?.first {
+                let subLocality = placemark.subLocality ?? ""
+                let locality = placemark.locality ?? ""
+                let country = placemark.country ?? ""
+                
+                if country.contains("Hong Kong") || country.contains("香港") {
+                    self.locationName = subLocality.isEmpty ? locality : subLocality
+                    if self.locationName.isEmpty {
+                        self.locationName = "香港"
+                    }
+                } else {
+                    self.locationName = subLocality.isEmpty ? "\(locality), \(country)" : "\(subLocality), \(locality)"
+                }
+            } else {
+                self.locationName = "位置未知"
+            }
+        }
+    }
+    
+    func locationManager(_ manager: CLLocationManager, didFailWithError error: Error) {
+        print("位置取得失敗: \(error)")
+        locationName = "位置未知"
+    }
+    
+    func locationManagerDidChangeAuthorization(_ manager: CLLocationManager) {
+        if manager.authorizationStatus == .authorizedWhenInUse || manager.authorizationStatus == .authorizedAlways {
+            manager.startUpdatingLocation()
+        } else {
+            locationName = "位置權限未允許"
+        }
+    }
 }
 
 // MARK: - 遊戲狀態管理
@@ -152,7 +209,6 @@ class MinesweeperViewModel {
             message = "💥 踩到地雷了！用了 \(elapsedTime) 秒"
             stopTimer()
             revealAllMines()
-            uploadRecord()
             return
         }
         
@@ -224,11 +280,10 @@ class MinesweeperViewModel {
             isWin = true
             message = "🎉 恭喜！你贏了！用了 \(elapsedTime) 秒"
             stopTimer()
-            uploadRecord()
         }
     }
     
-    func uploadRecord() {
+    func uploadRecord(locationName: String) {
         guard let userId = Auth.auth().currentUser?.uid else { return }
         
         let db = Firestore.firestore()
@@ -241,6 +296,7 @@ class MinesweeperViewModel {
             "mines": totalMines,
             "revealedSafe": revealedSafe,
             "time": elapsedTime,
+            "location": locationName,
             "timestamp": FieldValue.serverTimestamp()
         ]
         
@@ -248,7 +304,7 @@ class MinesweeperViewModel {
             if let error = error {
                 print("上傳失敗: \(error)")
             } else {
-                print("記錄上傳成功！")
+                print("記錄上傳成功！位置: \(locationName)")
             }
         }
     }
@@ -351,6 +407,7 @@ struct HistoryView: View {
         let mines: Int
         let revealedSafe: Int
         let time: Int
+        let location: String
         let timestamp: Date
     }
     
@@ -401,6 +458,8 @@ struct HistoryView: View {
                     Text("翻開安全格: \(record.revealedSafe)")
                     Text("時間: \(record.time) 秒")
                         .foregroundStyle(.gray)
+                    Text("位置: \(record.location)")
+                        .foregroundStyle(.blue)
                     Text(record.timestamp, style: .date)
                         .font(.caption)
                         .foregroundStyle(.gray)
@@ -432,19 +491,22 @@ struct HistoryView: View {
                           let mines = data["mines"] as? Int,
                           let revealedSafe = data["revealedSafe"] as? Int,
                           let time = data["time"] as? Int,
+                          let location = data["location"] as? String,
                           let timestamp = data["timestamp"] as? Timestamp else {
                         return nil
                     }
-                    return GameRecord(difficulty: difficulty, isWin: isWin, mines: mines, revealedSafe: revealedSafe, time: time, timestamp: timestamp.dateValue())
+                    return GameRecord(difficulty: difficulty, isWin: isWin, mines: mines, revealedSafe: revealedSafe, time: time, location: location, timestamp: timestamp.dateValue())
                 }
             }
     }
 }
 
-// MARK: - 主遊戲畫面（版面完全置中 + 動態格子大小 + 橫豎向優化）
+// MARK: - 主遊戲畫面（修正重複上傳 + 位置正確傳入）
 struct MinesweeperView: View {
     @State private var viewModel = MinesweeperViewModel()
+    @StateObject private var locationManager = LocationManager()
     @Environment(AuthViewModel.self) private var authVM
+    @State private var hasUploaded = false  // 防止重複上傳
     
     var body: some View {
         NavigationStack {
@@ -452,7 +514,6 @@ struct MinesweeperView: View {
                 let totalWidth = geometry.size.width
                 let totalHeight = geometry.size.height
                 
-                // 計算最大板寬/高，讓總面積穩定（豎向 90% 寬，橫向 70% 高）
                 let maxBoardWidth = totalWidth * 0.9
                 let maxBoardHeight = totalHeight * (geometry.size.width > geometry.size.height ? 0.7 : 0.6)
                 
@@ -473,13 +534,18 @@ struct MinesweeperView: View {
                     .padding(.horizontal, 20)
                     .frame(maxWidth: .infinity, alignment: .center)
                     
+                    Text("目前位置: \(locationManager.locationName)")
+                        .font(.subheadline)
+                        .foregroundStyle(.blue)
+                        .padding(.horizontal)
+                        .frame(maxWidth: .infinity, alignment: .center)
+                    
                     Text(viewModel.message)
                         .foregroundStyle(viewModel.isWin ? .green : .red)
                         .font(.title2)
                         .padding()
                         .frame(maxWidth: .infinity, alignment: .center)
                     
-                    // 遊戲板置中容器
                     VStack(spacing: 2) {
                         ForEach(0..<viewModel.rows, id: \.self) { row in
                             HStack(spacing: 2) {
@@ -504,15 +570,18 @@ struct MinesweeperView: View {
                            alignment: .center)
                     .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .center)
                     
-                    HStack(spacing: 20) {
+                    HStack(spacing: 12) {
                         ForEach([Difficulty.easy, .medium, .hard], id: \.self) { diff in
                             Button(diff.label) {
                                 viewModel.startNewGame(difficulty: diff)
+                                hasUploaded = false  // 新遊戲重置旗標
                             }
                             .buttonStyle(.bordered)
+                            .controlSize(.small)
+                            .font(.subheadline)
                         }
                     }
-                    .padding()
+                    .padding(.horizontal)
                     .frame(maxWidth: .infinity, alignment: .center)
                 }
                 .padding()
@@ -532,13 +601,26 @@ struct MinesweeperView: View {
                         HistoryView()
                     }
                 }
+                
+                ToolbarItem(placement: .bottomBar) {
+                    NavigationLink(destination: ChatView()) {
+                        Label("AI 聊天", systemImage: "message")
+                    }
+                }
             }
         }
         .task {
             viewModel.startNewGame()
+            hasUploaded = false
         }
         .onDisappear {
             viewModel.stopTimer()
+        }
+        .onChange(of: viewModel.gameOver) { newValue in
+            if newValue && !hasUploaded {
+                viewModel.uploadRecord(locationName: locationManager.locationName)
+                hasUploaded = true
+            }
         }
     }
     
